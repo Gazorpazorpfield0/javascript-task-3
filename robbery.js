@@ -19,6 +19,9 @@ const weekDays = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
 const timeMask = /[0-2][0-9]:[0-5][0-9]/;
 const startPoint = new Date(2020, 4, 11);
 
+let timeExistance = false;
+let appropriateMoment;
+
 function getTimeHours(str) {
     let result = str.match(timeMask).join();
 
@@ -58,7 +61,6 @@ function checkTimezone(bankTimezone, memberTimezone, memberDateToChangeFrom, mem
         let differenceOfTimezone = bankTimezone.slice(-1) - memberTimezone.slice(-1);
         memberDateToChangeFrom.setHours(memberDateToChangeFrom.getHours() + differenceOfTimezone);
         memberDateToChangeTo.setHours(memberDateToChangeTo.getHours() + differenceOfTimezone);
-
     }
 
     if (bankTimezone.slice(-1) < memberTimezone.slice(-1)) {
@@ -92,8 +94,7 @@ function checkDatesEqual(date1, date2) {
     return false;
 }
 
-function checkCurrentMemberIsFree(currentMemberSchedule, workingHours,
-                                  currentDayPointTo, currentDayPointFrom) {
+function checkCurrentMemberIsFree(currentMemberSchedule, workingHours, timePoints) {
     for (let i = 0; i < currentMemberSchedule.length; i++) {
         let currentDaySchedule = currentMemberSchedule[i];
         let memberDateFrom = extractDate(currentDaySchedule.from);
@@ -103,14 +104,14 @@ function checkCurrentMemberIsFree(currentMemberSchedule, workingHours,
                                  memberDateFrom, memberDateTo);
 
         if (!(checkWeekDaysEqual(getWeekDay(currentDaySchedule.from),
-                    weekDays[currentDayPointFrom.getDay()])) &&
+                    weekDays[timePoints.currentDayPoint.from.getDay()])) &&
                     (checkWeekDaysEqual(getWeekDay(currentDaySchedule.from),
                     getWeekDay(currentDaySchedule.to)))) {
             continue;
         }
 
-        if ((memberDateFrom >= currentDayPointTo) ||
-            (memberDateTo <= currentDayPointFrom)) {
+        if ((memberDateFrom >= timePoints.currentDayPoint.to) ||
+            (memberDateTo <= timePoints.currentDayPoint.from)) {
             return true;
         }
 
@@ -144,27 +145,22 @@ function setTime(workingHours) {
     };
 }
 
-exports.getAppropriateMoment = function (schedule, duration, workingHours) {
-    console.info(schedule, duration, workingHours);
-
-    let currentDayPoint = setTimeCurrentPoint(workingHours, duration, startPoint);
-    let bankWorkingHours = setTime(workingHours);
-
-    let timeExistance = false;
-    let appropriateMoment;
-
+function mainIterarion(timePoints, needableElemsForRobbery) {
     function nextDayWithTimeReset() {
-        increaseAllDayOfDate(currentDayPoint.from, currentDayPoint.to,
-                             bankWorkingHours.from, bankWorkingHours.to);
-        currentDayPoint = setTimeCurrentPoint(workingHours, duration, currentDayPoint.from);
+        increaseAllDayOfDate(timePoints.currentDayPoint.from, timePoints.currentDayPoint.to,
+                             timePoints.bankWorkingHours.from, timePoints.bankWorkingHours.to);
+        timePoints.currentDayPoint = setTimeCurrentPoint(needableElemsForRobbery.workingHours,
+                                                         needableElemsForRobbery.duration,
+                                                         timePoints.currentDayPoint.from);
     }
 
     function checkMembersIsFree() {
-        let members = Object.keys(schedule);
+        let members = Object.keys(needableElemsForRobbery.schedule);
         for (let member of members) {
-            let currentMemberSchedule = schedule[member];
-            if (checkCurrentMemberIsFree(currentMemberSchedule, workingHours,
-                                    currentDayPoint.to, currentDayPoint.from)) {
+            let currentMemberSchedule = needableElemsForRobbery.schedule[member];
+            if (checkCurrentMemberIsFree(currentMemberSchedule,
+                                         needableElemsForRobbery.workingHours,
+                                         timePoints)) {
                 continue;
             }
 
@@ -174,24 +170,42 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
         return true;
     }
 
-    for (; currentDayPoint.from.getDay() < 4;) {
+    for (; timePoints.currentDayPoint.from.getDay() < 4;) {
         if (checkMembersIsFree()) {
             timeExistance = true;
-            appropriateMoment = new Date(currentDayPoint.from);
+            appropriateMoment = new Date(timePoints.currentDayPoint.from);
             break;
         }
 
-        increaseDateOnMinute(currentDayPoint);
+        increaseDateOnMinute(timePoints.currentDayPoint);
 
-        if (checkDatesEqual(currentDayPoint.to, bankWorkingHours.to)) {
+        if (checkDatesEqual(timePoints.currentDayPoint.to, timePoints.bankWorkingHours.to)) {
             nextDayWithTimeReset();
             continue;
         }
-
-        // if ((currentDayPoint.to.getHours() === 17) && (currentDayPoint.to.getMinutes() === 59)) {
-        //     console.log('hey there');
-        // }
     }
+}
+
+exports.getAppropriateMoment = function (schedule, duration, workingHours) {
+    console.info(schedule, duration, workingHours);
+
+    let timePoints = {
+        currentDayPoint: setTimeCurrentPoint(workingHours, duration, startPoint),
+        bankWorkingHours: setTime(workingHours)
+    };
+    let needableElemsForRobbery = {
+        schedule: schedule,
+        duration: duration,
+        workingHours: workingHours
+    };
+
+    // сбрасываем внешние переменные;
+    timeExistance = false;
+    appropriateMoment = undefined;
+
+    // Главная часть функции. В ней мы пробегаемся по каждому члену банды, проверяя,
+    // свободен ли он. Если все будут свободны, то timeExistance меняем на true
+    mainIterarion(timePoints, needableElemsForRobbery);
 
     return {
 
