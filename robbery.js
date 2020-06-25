@@ -4,7 +4,7 @@
  * Сделано задание на звездочку
  * Реализовано оба метода и tryLater
  */
-exports.isStar = false;
+exports.isStar = true;
 
 /**
  * @param {Object} schedule – Расписание Банды
@@ -70,9 +70,9 @@ function checkTimezone(bankTimezone, memberTimezone, memberDateToChangeFrom, mem
     }
 }
 
-function increaseDateOnMinute(date) {
-    date.from.setMinutes(date.from.getMinutes() + 1);
-    date.to.setMinutes(date.to.getMinutes() + 1);
+function increaseDateOnMinutes(date, minutes) {
+    date.from.setMinutes(date.from.getMinutes() + minutes);
+    date.to.setMinutes(date.to.getMinutes() + minutes);
 }
 
 function increaseDayOfDate(date) {
@@ -86,8 +86,8 @@ function increaseAllDayOfDate(date1, date2, date3, date4) {
     increaseDayOfDate(date4);
 }
 
-function checkDatesEqual(date1, date2) {
-    if ((date1.getHours() === date2.getHours()) && (date1.getMinutes() === date2.getMinutes())) {
+function checkBankStillWorking(currentDayPointTo, bankWorkingHoursTo) {
+    if (currentDayPointTo <= bankWorkingHoursTo) {
         return true;
     }
 
@@ -102,11 +102,15 @@ function checkCurrentMemberIsFree(currentMemberSchedule, workingHours, timePoint
 
         checkTimezone(workingHours.from, currentDaySchedule.from,
                                  memberDateFrom, memberDateTo);
+        if (checkMemberIsFreeThisDay(weekDays[timePoints.currentDayPoint.from.getDay()],
+                                    currentMemberSchedule)) {
+            return true;
+        }
 
         if (!(checkWeekDaysEqual(getWeekDay(currentDaySchedule.from),
                     weekDays[timePoints.currentDayPoint.from.getDay()])) &&
-                    (checkWeekDaysEqual(getWeekDay(currentDaySchedule.from),
-                    getWeekDay(currentDaySchedule.to)))) {
+                    !(checkWeekDaysEqual(getWeekDay(currentDaySchedule.to),
+                    weekDays[timePoints.currentDayPoint.from.getDay()]))) {
             continue;
         }
 
@@ -145,6 +149,33 @@ function setTime(workingHours) {
     };
 }
 
+function checkMemberIsFreeThisDay(day, memberSchedule) {
+    function iter(currentSchedule) {
+        for (let j = 0; j < currentSchedule.length; j++) {
+            let value = currentSchedule[j];
+            if (value.indexOf(day) === -1) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    for (let i = 0; i < memberSchedule.length; i++) {
+        let currentSchedule = Object.values(memberSchedule[i]);
+        if (iter(currentSchedule)) {
+
+            continue;
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
 function mainIterarion(timePoints, needableElemsForRobbery) {
     function nextDayWithTimeReset() {
         increaseAllDayOfDate(timePoints.currentDayPoint.from, timePoints.currentDayPoint.to,
@@ -171,18 +202,22 @@ function mainIterarion(timePoints, needableElemsForRobbery) {
     }
 
     for (; timePoints.currentDayPoint.from.getDay() < 4;) {
+        // if (timePoints.currentDayPoint.from.getDate() === 13) {
+        //     console.log('here');
+        // }
+
+        if (!checkBankStillWorking(timePoints.currentDayPoint.to, timePoints.bankWorkingHours.to)) {
+            nextDayWithTimeReset();
+            continue;
+        }
+
         if (checkMembersIsFree()) {
             timeExistance = true;
             appropriateMoment = new Date(timePoints.currentDayPoint.from);
             break;
         }
 
-        increaseDateOnMinute(timePoints.currentDayPoint);
-
-        if (checkDatesEqual(timePoints.currentDayPoint.to, timePoints.bankWorkingHours.to)) {
-            nextDayWithTimeReset();
-            continue;
-        }
+        increaseDateOnMinutes(timePoints.currentDayPoint, 1);
     }
 }
 
@@ -262,6 +297,29 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {Boolean}
          */
         tryLater: function () {
+            let clonedTimePoints = {
+                currentDayPoint: {
+                    from: new Date(timePoints.currentDayPoint.from),
+                    to: new Date(timePoints.currentDayPoint.to)
+                },
+
+                bankWorkingHours: setTime(workingHours)
+            };
+
+            timeExistance = false;
+            appropriateMoment = undefined;
+
+            increaseDateOnMinutes(timePoints.currentDayPoint, 30);
+
+            mainIterarion(timePoints, needableElemsForRobbery);
+
+            if (timeExistance) {
+                return true;
+            }
+
+            timePoints = clonedTimePoints;
+            appropriateMoment = new Date(timePoints.currentDayPoint.from);
+
             return false;
         }
     };
